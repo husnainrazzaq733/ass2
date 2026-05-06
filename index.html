@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AS-I | PMF Study Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--surface:#161b22;--card:#1c2333;--border:#30363d;
+  --accent:#7c3aed;--accent2:#a855f7;--green:#22c55e;--blue:#3b82f6;
+  --orange:#f97316;--text:#e6edf3;--muted:#8b949e;--radius:14px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+
+/* HEADER */
+header{background:linear-gradient(135deg,#1e0a3c,#0d1117);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 16px rgba(124,58,237,.4)}
+.logo h1{font-family:'Outfit',sans-serif;font-size:17px;font-weight:700}
+.logo p{font-size:11px;color:var(--muted)}
+#apiBadge{background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);color:var(--accent2);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500}
+#apiBadge.ok{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:var(--green)}
+
+/* TABS */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:14px;text-align:center;font-size:14px;font-weight:600;cursor:pointer;border-bottom:3px solid transparent;transition:.2s;color:var(--muted)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2)}
+.tab:hover:not(.active){color:var(--text)}
+
+/* PANELS */
+.panel{display:none;flex:1;flex-direction:column}
+.panel.active{display:flex}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== CHAT ===== */
+.chat-wrap{flex:1;display:flex;overflow:hidden}
+.sidebar{width:270px;min-width:270px;background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.sb-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.api-input-wrap{position:relative}
+.api-input-wrap input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 36px 9px 12px;color:var(--text);font-size:13px;font-family:inherit}
+.api-input-wrap input:focus{outline:none;border-color:var(--accent)}
+.api-input-wrap input::placeholder{color:var(--muted)}
+.eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px}
+.save-btn{width:100%;padding:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px}
+.api-hint{font-size:11px;color:var(--muted)}
+.api-hint a{color:var(--accent2);text-decoration:none}
+.quick-btn{width:100%;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:12.5px;cursor:pointer;margin-bottom:6px;transition:.2s;font-family:inherit}
+.quick-btn:hover{border-color:var(--accent);background:rgba(124,58,237,.1);transform:translateX(2px)}
+
+/* Chat messages */
+.chat-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
+#messages::-webkit-scrollbar{width:5px}
+#messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.welcome{text-align:center;margin:auto;max-width:420px;padding:30px 16px}
+.welcome-icon{font-size:56px;display:block;animation:float 3s ease-in-out infinite;margin-bottom:12px}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.welcome h2{font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent2),#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.welcome p{color:var(--muted);font-size:13px;line-height:1.6}
+.msg{display:flex;gap:10px;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{flex-direction:row-reverse}
+.av{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.msg.user .av{background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+.msg.ai .av{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.bubble{max-width:73%;padding:13px 16px;border-radius:var(--radius);font-size:13.5px;line-height:1.7}
+.msg.user .bubble{background:#1d4ed8;border-top-right-radius:4px;color:#fff}
+.msg.ai .bubble{background:var(--card);border:1px solid var(--border);border-top-left-radius:4px}
+.bubble strong{color:var(--accent2);font-weight:700}
+/* ptag removed */
+.typing-bub{display:flex;align-items:center;gap:5px;padding:13px 16px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:bounce .9s infinite}
+.dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)}}
+.input-bar{border-top:1px solid var(--border);background:var(--surface);padding:14px 20px}
+.input-row{display:flex;gap:10px;align-items:flex-end}
+#qInput{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--text);font-size:14px;font-family:inherit;resize:none;max-height:110px;line-height:1.5}
+#qInput:focus{outline:none;border-color:var(--accent)}
+#qInput::placeholder{color:var(--muted)}
+#sendBtn{width:46px;height:46px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;box-shadow:0 0 16px rgba(124,58,237,.3)}
+#sendBtn:hover{transform:scale(1.06)}
+#sendBtn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+#statusBar{font-size:12px;color:var(--muted);text-align:center;padding:6px;transition:.3s}
+#statusBar.err{color:#f87171}
+#statusBar.ok{color:var(--green)}
+.chat-toggles{display:flex;gap:8px;margin-bottom:10px}
+.toggle-btn{flex:1;padding:8px;border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:.2s;font-family:inherit}
+.toggle-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 0 12px rgba(124,58,237,.3)}
+.hint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
+
+@media(max-width:680px){.sidebar{display:none}.btn-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">💻</div>
+    <div>
+      <h1>AS-I Assistant</h1>
+      <p>PMF Study Tool · Applied Sciences I</p>
+    </div>
+  </div>
+  <span id="apiBadge" class="ok">✓ API Ready</span>
+</header>
+
+<!-- TABS REMOVED -->
+
+<!-- PANEL Q REMOVED -->
+
+<!-- ========== MAIN PANEL ========== -->
+<div class="panel active" id="panel-chat">
+  <div class="chat-wrap">
+    <aside class="sidebar">
+      <div>
+        <p class="sb-title">🔐 Groq API Key</p>
+        <div class="api-input-wrap">
+          <input type="password" id="apiKeyInput" placeholder="gsk_..." autocomplete="off"/>
+          <button class="eye" onclick="toggleEye()">👁</button>
+        </div>
+        <button class="save-btn" onclick="saveKey()">✓ Save Key</button>
+        <p class="api-hint">Free: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></p>
+      </div>
+      <div>
+        <p class="sb-title">⚡ Quick Questions</p>
+        <button class="quick-btn" onclick="askQuick('What is a Computer System? Explain CPU and RAM.')">💻 Computer & CPU</button>
+        <button class="quick-btn" onclick="askQuick('Explain different types of computers.')">🖥️ Types of Computers</button>
+        <button class="quick-btn" onclick="askQuick('What are input and output devices?')">⌨️ Input/Output Devices</button>
+        <button class="quick-btn" onclick="askQuick('Explain software and its types.')">💾 Software</button>
+        <button class="quick-btn" onclick="askQuick('What is an operating system?')">⚙️ Operating System</button>
+        <button class="quick-btn" onclick="askQuick('What is MS Word used for?')">📝 MS Word</button>
+      </div>
+    </aside>
+    <div class="chat-main">
+      <div id="messages">
+        <div class="welcome" id="welcomeCard">
+          <span class="welcome-icon">💻</span>
+          <h2>Book se koi bhi sawal pochein</h2>
+          <p>Applied Sciences I ki book se AI jawab dega.</p>
+        </div>
+      </div>
+      <div class="input-bar">
+        <div class="chat-toggles">
+          <button class="toggle-btn active" id="chat-short" onclick="setChatType('short')">Short (2 Marks)</button>
+          <button class="toggle-btn" id="chat-long" onclick="setChatType('long')">Long (8 Marks)</button>
+        </div>
+        <div class="input-row">
+          <textarea id="qInput" rows="1" placeholder="Sawal likhein... (Enter = Send)"></textarea>
+          <button id="sendBtn" onclick="sendMessage()">➤</button>
+        </div>
+        <div id="statusBar"></div>
+        <p class="hint">Applied Sciences I · Punjab Medical Faculty</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_KEY = '';
+let apiKey = localStorage.getItem('groq_key') || DEFAULT_KEY;
+
+// Init
+if(document.getElementById('apiKeyInput'))
+  document.getElementById('apiKeyInput').value = apiKey;
+
+// API key
+function saveKey(){
+  const k = document.getElementById('apiKeyInput').value.trim();
+  if(!k) return;
+  apiKey = k;
+  localStorage.setItem('groq_key', k);
+  document.getElementById('apiBadge').textContent = '✓ API Ready';
+  document.getElementById('apiBadge').className = 'ok';
+}
+function toggleEye(){
+  const i = document.getElementById('apiKeyInput');
+  i.type = i.type==='password'?'text':'password';
+}
+
+// Chat functionality follows
+
+// ===== CHAT =====
+const qInput = document.getElementById('qInput');
+qInput.addEventListener('input', function(){
+  this.style.height='auto';
+  this.style.height=Math.min(this.scrollHeight,110)+'px';
+});
+qInput.addEventListener('keydown', function(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+});
+
+function askQuick(q){
+  document.getElementById('qInput').value = q;
+  sendMessage();
+}
+
+function setStatus(msg,cls=''){
+  const s=document.getElementById('statusBar');
+  s.textContent=msg; s.className=cls;
+}
+
+function appendMsg(role,text,pages){
+  const wc=document.getElementById('welcomeCard');
+  if(wc) wc.remove();
+  const msgs=document.getElementById('messages');
+  const div=document.createElement('div');
+  div.className='msg '+role;
+  const av=document.createElement('div');
+  av.className='av';
+  av.textContent=role==='user'?'👤':'🤖';
+  const bub=document.createElement('div');
+  bub.className='bubble';
+  bub.innerHTML=fmtText(text);
+
+  if(role==='user'){div.appendChild(bub);div.appendChild(av);}
+  else{div.appendChild(av);div.appendChild(bub);}
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+function fmtText(t){
+  t=t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  t=t.replace(/\n/g,'<br/>');
+  return t;
+}
+
+function showTyping(){
+  const wc=document.getElementById('welcomeCard');
+  if(wc) wc.remove();
+  const msgs=document.getElementById('messages');
+  const div=document.createElement('div');
+  div.id='typing'; div.className='msg ai';
+  div.innerHTML=`<div class="av">🤖</div><div class="bubble"><div class="typing-bub"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+}
+function rmTyping(){const t=document.getElementById('typing');if(t)t.remove();}
+
+let chatType = 'short';
+function setChatType(t){
+  chatType = t;
+  document.getElementById('chat-short').classList.toggle('active', t==='short');
+  document.getElementById('chat-long').classList.toggle('active', t==='long');
+}
+
+async function sendMessage(){
+  const q=qInput.value.trim();
+  if(!q){setStatus('Sawal likhein!','err');return;}
+  const btn=document.getElementById('sendBtn');
+  btn.disabled=true;
+  qInput.value=''; qInput.style.height='auto';
+  appendMsg('user',q,null);
+  showTyping();
+  setStatus('Jawab dhundh raha hoon...');
+  try{
+    const res=await fetch('/ask',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q, type: chatType, api_key:apiKey})
+    });
+    const data=await res.json();
+    rmTyping();
+    if(data.error){appendMsg('ai','Error: '+data.error);}
+    else{appendMsg('ai',data.answer);setStatus('Jawab mil gaya!','ok');setTimeout(()=>setStatus(''),3000);}
+  }catch(e){rmTyping();appendMsg('ai','Server error: '+e.message,null);setStatus('Error','err');}
+  btn.disabled=false;
+}
+</script>
+</body>
+</html>
