@@ -91,20 +91,20 @@ RULES:
 QUESTION: {question}
 SHORT ANSWER:"""
     else:
-        prompt = f"""You are an expert tutor for Applied Sciences I. Provide a DETAILED answer (worth 8 marks) to the question.
+        prompt = f"""You are an expert tutor for Applied Sciences I. Provide a detailed answer (worth 4 marks) to the question.
 
 RULES:
 - You must ONLY use the provided content to answer.
 - If the answer cannot be found in the CONTENT, reply EXACTLY with: "Is sawal ka jawab AS-I book mein nahi hai."
 - Do NOT use your general outside knowledge to answer.
 - Use **Bold Headings** and sub-headings.
-- Use bullet points for classification.
-- Cover all major points.
+- Use bullet points if helpful for classification.
+- Keep the answer focused and comprehensive enough for 4 marks.
 - No page numbers or source mentions.
 - Answer directly based on this content: {context}
 
 QUESTION: {question}
-LONG DETAILED ANSWER:"""
+LONG ANSWER (4 Marks):"""
 
     try:
         answer = call_groq(prompt, api_key)
