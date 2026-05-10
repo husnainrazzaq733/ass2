@@ -90,6 +90,11 @@ header{background:linear-gradient(135deg,#1e0a3c,#0d1117);border-bottom:1px soli
 .toggle-btn{flex:1;padding:8px;border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:.2s;font-family:inherit}
 .toggle-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 0 12px rgba(124,58,237,.3)}
 .hint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
+.source-badge{font-size:10px;text-transform:uppercase;padding:2px 6px;border-radius:4px;margin-bottom:6px;display:inline-block;font-weight:700}
+.source-book{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
+.source-internet{background:rgba(59,130,246,0.15);color:var(--blue);border:1px solid rgba(59,130,246,0.3)}
+#uploadBtn{width:46px;height:46px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s}
+#uploadBtn:hover{border-color:var(--accent);color:var(--accent2)}
 
 @media(max-width:680px){.sidebar{display:none}.btn-grid{grid-template-columns:1fr}}
 </style>
@@ -148,6 +153,8 @@ header{background:linear-gradient(135deg,#1e0a3c,#0d1117);border-bottom:1px soli
           <button class="toggle-btn" id="chat-long" onclick="setChatType('long')">Long (4 Marks)</button>
         </div>
         <div class="input-row">
+          <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleUpload(this)">
+          <button id="uploadBtn" onclick="document.getElementById('fileInput').click()" title="Upload Image">📷</button>
           <textarea id="qInput" rows="1" placeholder="Sawal likhein... (Enter = Send)"></textarea>
           <button id="sendBtn" onclick="sendMessage()">➤</button>
         </div>
@@ -202,7 +209,7 @@ function setStatus(msg,cls=''){
   s.textContent=msg; s.className=cls;
 }
 
-function appendMsg(role,text,pages){
+function appendMsg(role,text,source=null){
   const wc=document.getElementById('welcomeCard');
   if(wc) wc.remove();
   const msgs=document.getElementById('messages');
@@ -213,7 +220,15 @@ function appendMsg(role,text,pages){
   av.textContent=role==='user'?'👤':'🤖';
   const bub=document.createElement('div');
   bub.className='bubble';
-  bub.innerHTML=fmtText(text);
+  
+  let content = '';
+  if(source){
+    const badgeClass = source === 'book' ? 'source-book' : 'source-internet';
+    const badgeText = source === 'book' ? '📚 From Book' : '🌐 From Internet';
+    content += `<span class="source-badge ${badgeClass}">${badgeText}</span><br/>`;
+  }
+  content += fmtText(text);
+  bub.innerHTML=content;
 
   if(role==='user'){div.appendChild(bub);div.appendChild(av);}
   else{div.appendChild(av);div.appendChild(bub);}
@@ -246,13 +261,53 @@ function setChatType(t){
   document.getElementById('chat-long').classList.toggle('active', t==='long');
 }
 
+async function handleUpload(input){
+  if(!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('api_key', apiKey);
+
+  setStatus('Image se text nikal raha hoon...');
+  showTyping();
+  
+  try {
+    const res = await fetch('/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    rmTyping();
+    
+    if(data.error){
+      setStatus('Upload failed','err');
+      appendMsg('ai', 'Error: ' + data.error);
+    } else {
+      setStatus('Text mil gaya!','ok');
+      qInput.value = data.extracted_text;
+      qInput.style.height = 'auto';
+      qInput.style.height = Math.min(qInput.scrollHeight, 110) + 'px';
+      // Automatically send if there's text
+      if(data.extracted_text.trim()){
+        sendMessage();
+      }
+    }
+  } catch(e) {
+    rmTyping();
+    setStatus('Error uploading','err');
+    appendMsg('ai', 'Upload error: ' + e.message);
+  }
+  input.value = ''; // Reset
+}
+
 async function sendMessage(){
   const q=qInput.value.trim();
   if(!q){setStatus('Sawal likhein!','err');return;}
   const btn=document.getElementById('sendBtn');
-  btn.disabled=true;
+  const upBtn=document.getElementById('uploadBtn');
+  btn.disabled=true; upBtn.disabled=true;
   qInput.value=''; qInput.style.height='auto';
-  appendMsg('user',q,null);
+  appendMsg('user',q);
   showTyping();
   setStatus('Jawab dhundh raha hoon...');
   try{
@@ -264,9 +319,14 @@ async function sendMessage(){
     const data=await res.json();
     rmTyping();
     if(data.error){appendMsg('ai','Error: '+data.error);}
-    else{appendMsg('ai',data.answer);setStatus('Jawab mil gaya!','ok');setTimeout(()=>setStatus(''),3000);}
-  }catch(e){rmTyping();appendMsg('ai','Server error: '+e.message,null);setStatus('Error','err');}
-  btn.disabled=false;
+    else{
+      appendMsg('ai',data.answer, data.source);
+      const statusMsg = data.source === 'internet' ? 'Internet se jawab mil gaya!' : 'Book se jawab mil gaya!';
+      setStatus(statusMsg,'ok');
+      setTimeout(()=>setStatus(''),3000);
+    }
+  }catch(e){rmTyping();appendMsg('ai','Server error: '+e.message);setStatus('Error','err');}
+  btn.disabled=false; upBtn.disabled=false;
 }
 </script>
 </body>
