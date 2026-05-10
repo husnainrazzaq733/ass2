@@ -20,8 +20,10 @@ except Exception as e:
 # Groq API Endpoint (OpenAI Compatible)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-def search_chunks(query, top_n=6):
+def search_chunks(query, top_n=10): # Increased top_n for multiple questions
+    # Simple keyword search, but for multiple questions we take more chunks
     query_words = set(re.findall(r'\w+', query.lower()))
+    if len(query_words) < 3: return []
     scored = []
     for chunk in CHUNKS:
         text_lower = chunk['text'].lower()
@@ -157,14 +159,14 @@ def ask():
 
     if qtype == 'short':
         if source == "book":
-            prompt = f"You are an expert tutor for Applied Sciences I. Provide a BRIEF answer (worth 2 marks, 3-5 lines) based ONLY on this content: {context}\n\nQUESTION: {question}\nSHORT ANSWER:"
+            prompt = f"You are an expert tutor for Applied Sciences I. Below is a text that may contain ONE or MULTIPLE questions. Provide a BRIEF answer (worth 2 marks each) for EVERY question found in the input. Use the provided context ONLY: {context}\n\nINPUT TEXT: {question}\n\nANSWERS:"
         else:
-            prompt = f"You are an expert tutor. Provide a BRIEF answer (worth 2 marks, 3-5 lines) based on this content: {context}\n\nQUESTION: {question}\nSHORT ANSWER (From Internet):"
+            prompt = f"You are an expert tutor. Below is a text with ONE or MULTIPLE questions. The answers were not in the book, so use your knowledge/internet to provide a BRIEF answer (2 marks each) for EVERY question. \n\nCONTEXT: {context}\n\nINPUT TEXT: {question}\n\nANSWERS (From Internet):"
     else:
         if source == "book":
-            prompt = f"You are an expert tutor for Applied Sciences I. Provide a detailed answer (worth 4 marks) based ONLY on this content: {context}\n\nQUESTION: {question}\nLONG ANSWER:"
+            prompt = f"You are an expert tutor for Applied Sciences I. Provide DETAILED answers (worth 4 marks each) for EVERY question found in the input. Use the provided context ONLY: {context}\n\nINPUT TEXT: {question}\n\nANSWERS:"
         else:
-            prompt = f"You are an expert tutor. Provide a detailed answer (worth 4 marks) based on this content: {context}\n\nQUESTION: {question}\nLONG ANSWER (From Internet):"
+            prompt = f"You are an expert tutor. Provide DETAILED answers (worth 4 marks each) for EVERY question found in the input based on this context: {context}\n\nINPUT TEXT: {question}\n\nANSWERS (From Internet):"
 
     try:
         answer = call_groq(prompt, api_key)
