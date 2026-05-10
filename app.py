@@ -34,7 +34,6 @@ def search_chunks(query, top_n=6):
 
 def call_groq(prompt, api_key, model="llama-3.3-70b-versatile", max_tokens=2048, images=None):
     if images:
-        # Vision requests often work better without a separate system message on some models
         messages = [
             {
                 "role": "user",
@@ -46,7 +45,7 @@ def call_groq(prompt, api_key, model="llama-3.3-70b-versatile", max_tokens=2048,
         for img in images:
             messages[0]["content"].append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{img}"}
+                "image_url": {"url": img} # img already includes data: prefix
             })
     else:
         messages = [
@@ -111,11 +110,9 @@ def upload():
 
     try:
         content = file.read()
-        
-        # Resize image if it's too large (> 1MB)
+        # Resize if large
         if len(content) > 1 * 1024 * 1024:
             img = Image.open(BytesIO(content))
-            # Maintain aspect ratio
             img.thumbnail((1280, 1280))
             output = BytesIO()
             img.save(output, format='JPEG', quality=85)
@@ -125,53 +122,13 @@ def upload():
             mime_type = file.content_type or 'image/jpeg'
 
         img_base64 = base64.b64encode(content).decode('utf-8')
+        data_uri = f"data:{mime_type};base64,{img_base64}"
         
-        # Use Llama 3.2 Vision to extract text
         prompt = "Extract all text and questions from this image. If it's a question, provide the question text clearly. Output ONLY the extracted text."
         
-        # Structure for Groq Vision
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime_type};base64,{img_base64}"}
-                    },
-                    {
-                        "type": "text",
-                        "text": prompt
-                    }
-                ]
-            }
-        ]
-        
-        payload = json.dumps({
-            "model": "llama-3.2-11b-vision-preview",
-            "messages": messages,
-            "temperature": 0.1,
-            "max_tokens": 1024
-        }).encode('utf-8')
-        
-        req = urllib.request.Request(
-            GROQ_URL,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-                "User-Agent": "Mozilla/5.0"
-            },
-            method="POST"
-        )
-        
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
-            extracted_text = result['choices'][0]['message']['content']
-            
+        # Use llama-3.2-11b-vision-instant as it replaces preview
+        extracted_text = call_groq(prompt, api_key, model="llama-3.2-11b-vision-instant", images=[data_uri])
         return jsonify({'extracted_text': extracted_text})
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode('utf-8')
-        return jsonify({'error': f"Groq Vision Error: {err_body}"}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
