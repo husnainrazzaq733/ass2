@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify, send_from_directory
 import json, os, re, urllib.request, urllib.parse, random, base64
 from duckduckgo_search import DDGS
+from io import BytesIO
+from PIL import Image
 
 app = Flask(__name__, static_folder='.')
 
@@ -31,26 +33,31 @@ def search_chunks(query, top_n=6):
     return [c for _, c in scored[:top_n]]
 
 def call_groq(prompt, api_key, model="llama-3.3-70b-versatile", max_tokens=2048, images=None):
-    messages = [
-        {"role": "system", "content": "You are an expert pharmacy exam assistant. Follow the specific instructions in the prompt."},
-        {"role": "user", "content": []}
-    ]
-    
     if images:
-        # Groq Vision format
-        messages[1]["content"].append({"type": "text", "text": prompt})
+        # Vision requests often work better without a separate system message on some models
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt}
+                ]
+            }
+        ]
         for img in images:
-            messages[1]["content"].append({
+            messages[0]["content"].append({
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{img}"}
             })
     else:
-        messages[1]["content"] = prompt
+        messages = [
+            {"role": "system", "content": "You are an expert pharmacy exam assistant. Follow the specific instructions in the prompt."},
+            {"role": "user", "content": prompt}
+        ]
 
     payload = json.dumps({
         "model": model,
         "messages": messages,
-        "temperature": 0.4,
+        "temperature": 0.2,
         "max_tokens": max_tokens
     }).encode('utf-8')
     
@@ -65,10 +72,17 @@ def call_groq(prompt, api_key, model="llama-3.3-70b-versatile", max_tokens=2048,
         method="POST"
     )
     
-    with urllib.request.urlopen(req, timeout=45) as resp:
-        result = json.loads(resp.read().decode('utf-8'))
-    
-    return result['choices'][0]['message']['content']
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+        return result['choices'][0]['message']['content']
+    except urllib.error.HTTPError as e:
+        err_data = e.read().decode('utf-8')
+        print(f"Groq API Error: {err_data}")
+        raise Exception(f"Groq API Error: {err_data}")
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise e
 
 def search_internet(query):
     try:
@@ -96,11 +110,68 @@ def upload():
         return jsonify({'error': 'API Key missing!'}), 400
 
     try:
-        img_base64 = base64.b64encode(file.read()).decode('utf-8')
+        content = file.read()
+        
+        # Resize image if it's too large (> 1MB)
+        if len(content) > 1 * 1024 * 1024:
+            img = Image.open(BytesIO(content))
+            # Maintain aspect ratio
+            img.thumbnail((1280, 1280))
+            output = BytesIO()
+            img.save(output, format='JPEG', quality=85)
+            content = output.getvalue()
+            mime_type = 'image/jpeg'
+        else:
+            mime_type = file.content_type or 'image/jpeg'
+
+        img_base64 = base64.b64encode(content).decode('utf-8')
+        
         # Use Llama 3.2 Vision to extract text
-        prompt = "Extract all text and questions from this image. If it's a question, just provide the question text clearly. Output only the extracted text."
-        extracted_text = call_groq(prompt, api_key, model="llama-3.2-11b-vision-preview", images=[img_base64])
+        prompt = "Extract all text and questions from this image. If it's a question, provide the question text clearly. Output ONLY the extracted text."
+        
+        # Structure for Groq Vision
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{img_base64}"}
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+        
+        payload = json.dumps({
+            "model": "llama-3.2-11b-vision-preview",
+            "messages": messages,
+            "temperature": 0.1,
+            "max_tokens": 1024
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(
+            GROQ_URL,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "Mozilla/5.0"
+            },
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+            extracted_text = result['choices'][0]['message']['content']
+            
         return jsonify({'extracted_text': extracted_text})
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode('utf-8')
+        return jsonify({'error': f"Groq Vision Error: {err_body}"}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -118,7 +189,6 @@ def ask():
     source = "book"
     
     if not relevant:
-        # Fallback to internet search
         web_context = search_internet(question)
         if web_context:
             context = web_context
@@ -132,12 +202,12 @@ def ask():
         if source == "book":
             prompt = f"You are an expert tutor for Applied Sciences I. Provide a BRIEF answer (worth 2 marks, 3-5 lines) based ONLY on this content: {context}\n\nQUESTION: {question}\nSHORT ANSWER:"
         else:
-            prompt = f"You are an expert tutor. The answer was not in the book, so use this internet content to provide a BRIEF answer (worth 2 marks, 3-5 lines): {context}\n\nQUESTION: {question}\nSHORT ANSWER (From Internet):"
+            prompt = f"You are an expert tutor. Provide a BRIEF answer (worth 2 marks, 3-5 lines) based on this content: {context}\n\nQUESTION: {question}\nSHORT ANSWER (From Internet):"
     else:
         if source == "book":
             prompt = f"You are an expert tutor for Applied Sciences I. Provide a detailed answer (worth 4 marks) based ONLY on this content: {context}\n\nQUESTION: {question}\nLONG ANSWER:"
         else:
-            prompt = f"You are an expert tutor. The answer was not in the book, so use this internet content to provide a detailed answer (worth 4 marks): {context}\n\nQUESTION: {question}\nLONG ANSWER (From Internet):"
+            prompt = f"You are an expert tutor. Provide a detailed answer (worth 4 marks) based on this content: {context}\n\nQUESTION: {question}\nLONG ANSWER (From Internet):"
 
     try:
         answer = call_groq(prompt, api_key)
@@ -146,8 +216,4 @@ def ask():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("  Chat with AS-I (Powered by Groq)")
-    print("  Open: http://localhost:5000")
-    print("=" * 50)
     app.run(debug=False, port=5000)
